@@ -616,6 +616,12 @@
       label: "#eae3d5", labelInk: "#5a5147", rule: "#e2dbcd",
       heads: ["#e8e1d2", "#e8e1d2", "#e8e1d2", "#e8e1d2", "#e8e1d2"],
     },
+    chalkboard: {
+      name: "Chalkboard",
+      ground: "#33403a", ink: "#f3efe4", rowA: "#3c4a44", rowB: "#37453f",
+      label: "#465550", labelInk: "#f3efe4", rule: "#5f6f68",
+      heads: ["#e79aa8", "#ecd07a", "#8ec5e0", "#a6cf9b", "#c3a6d8"],
+    },
   };
 
   const SAMPLE = `Chore,Mon,Tue,Wed,Thu,Fri,Sat,Sun
@@ -1021,6 +1027,7 @@ Family movie pick,,,,,,,Dad`;
     b.className = "swatch";
     b.dataset.key = key;
     b.setAttribute("aria-pressed", "false");
+    if (!isLight(p.ground)) { b.style.background = p.ground; b.style.color = p.ink; }
     const dots = document.createElement("span");
     dots.className = "dots";
     p.heads.slice(0, 4).forEach((h) => {
