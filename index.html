@@ -514,6 +514,7 @@
         <button class="btn" id="addChore" type="button">＋ Add chore</button>
         <button class="btn" id="addDay" type="button">＋ Add day</button>
         <button class="btn" id="exampleBtn" type="button">Reload example</button>
+        <button class="btn" id="downloadCsv" type="button">⤓ Download CSV</button>
         <button class="btn primary" id="printBtn" type="button">Print / Save as PDF</button>
       </div>
     </div>
@@ -1067,6 +1068,36 @@ Family movie pick,,,,,,,Dad`;
   }
   $("addChore").addEventListener("click", addChore);
   $("addDay").addEventListener("click", addDay);
+
+  // ---- download the current chart (with all edits) back to a CSV file ----
+  function toCSV(data) {
+    return data
+      .map((row) =>
+        row
+          .map((cell) => {
+            const s = cell == null ? "" : String(cell);
+            return /[",\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+          })
+          .join(",")
+      )
+      .join("\r\n");
+  }
+  function downloadCSV() {
+    if (!rows.length) { toast("Nothing to download yet."); return; }
+    try {
+      const blob = new Blob([toCSV(rows)], { type: "text/csv" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = (docTitle().replace(/[^\w\- ]+/g, "").trim().replace(/\s+/g, "-") || "chore-chart") + ".csv";
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
+      toast("Saved your edited chart as a CSV in Downloads.");
+    } catch (e) {
+      toast("Couldn't download here — try it on the live site.");
+    }
+  }
+  $("downloadCsv").addEventListener("click", downloadCSV);
 
   // small non-blocking status message (alert() is blocked in the preview frame)
   let toastTimer = null;
