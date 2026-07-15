@@ -1,0 +1,1031 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Turn a CSV into a whimsical printable chore chart for the fridge.">
+</head>
+<body>
+<title>The Chore Chart Maker</title>
+<style>
+  :root {
+    /* app chrome tokens (light) */
+    --app-bg: #f3ede1;
+    --app-bg2: #ece3d2;
+    --panel: #fffdf8;
+    --panel-line: #e4d9c4;
+    --app-ink: #4a3f30;
+    --app-muted: #8c7c63;
+    --brand: #e8574c;
+    --brand-ink: #ffffff;
+    --focus: #3b7ddd;
+    --shadow: 0 10px 30px rgba(74, 55, 30, 0.16);
+
+    /* default sheet palette (Lemonade) — overwritten by JS */
+    --ground: #fffdf5;
+    --ink: #4a3b2a;
+    --rowA: #ffffff;
+    --rowB: #fff6e4;
+    --label: #fceccf;
+    --labelInk: #7a5a2e;
+    --rule: #ead9bc;
+    --font: "Chalkboard SE", "Comic Sans MS", cursive;
+    --name-width: 220px;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --app-bg: #241f1a;
+      --app-bg2: #1c1813;
+      --panel: #2e2820;
+      --panel-line: #443b2e;
+      --app-ink: #f0e7d6;
+      --app-muted: #b3a488;
+      --brand: #ff6f63;
+      --shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+    }
+  }
+  :root[data-theme="light"] {
+    --app-bg: #f3ede1; --app-bg2: #ece3d2; --panel: #fffdf8; --panel-line: #e4d9c4;
+    --app-ink: #4a3f30; --app-muted: #8c7c63; --brand: #e8574c; --shadow: 0 10px 30px rgba(74,55,30,.16);
+  }
+  :root[data-theme="dark"] {
+    --app-bg: #241f1a; --app-bg2: #1c1813; --panel: #2e2820; --panel-line: #443b2e;
+    --app-ink: #f0e7d6; --app-muted: #b3a488; --brand: #ff6f63; --shadow: 0 10px 30px rgba(0,0,0,.45);
+  }
+
+  * { box-sizing: border-box; }
+
+  .app {
+    min-height: 100vh;
+    background:
+      radial-gradient(1200px 600px at 15% -10%, var(--app-bg2), transparent 60%),
+      var(--app-bg);
+    color: var(--app-ink);
+    font-family: ui-rounded, "Segoe UI", system-ui, sans-serif;
+    padding: 28px 20px 60px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 22px;
+  }
+
+  .masthead {
+    text-align: center;
+    max-width: 640px;
+  }
+  .masthead .kicker {
+    text-transform: uppercase;
+    letter-spacing: 0.18em;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--brand);
+    margin: 0 0 6px;
+  }
+  .masthead h1 {
+    margin: 0;
+    font-size: clamp(24px, 4vw, 34px);
+    font-family: "Marker Felt", "Comic Sans MS", cursive;
+    text-wrap: balance;
+    line-height: 1.1;
+  }
+  .masthead p {
+    margin: 8px 0 0;
+    color: var(--app-muted);
+    font-size: 15px;
+  }
+
+  /* ---------- toolbar ---------- */
+  .toolbar {
+    width: min(920px, 100%);
+    background: var(--panel);
+    border: 1px solid var(--panel-line);
+    border-radius: 18px;
+    box-shadow: var(--shadow);
+    padding: 18px;
+    display: grid;
+    gap: 16px;
+  }
+  .dropzone {
+    border: 2.5px dashed var(--panel-line);
+    border-radius: 14px;
+    padding: 22px;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color 0.15s, background 0.15s;
+    background: transparent;
+  }
+  .dropzone:hover, .dropzone.drag {
+    border-color: var(--brand);
+    background: color-mix(in srgb, var(--brand) 7%, transparent);
+  }
+  .dropzone strong { color: var(--brand); }
+  .dropzone .sub { color: var(--app-muted); font-size: 13px; margin-top: 6px; }
+  .dropzone input[type="file"] { display: none; }
+
+  .controls {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 14px;
+    align-items: end;
+  }
+  .field { display: flex; flex-direction: column; gap: 6px; }
+  .field > label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.09em;
+    font-weight: 700;
+    color: var(--app-muted);
+  }
+  select {
+    font: inherit;
+    padding: 9px 10px;
+    border-radius: 10px;
+    border: 1px solid var(--panel-line);
+    background: var(--panel);
+    color: var(--app-ink);
+    cursor: pointer;
+  }
+  input[type="range"] {
+    width: 100%;
+    accent-color: var(--brand);
+    cursor: pointer;
+    margin: 6px 0 4px;
+  }
+  .swatches { display: flex; gap: 8px; }
+  .swatch {
+    flex: 1;
+    border: 2px solid transparent;
+    border-radius: 10px;
+    padding: 7px 4px 6px;
+    cursor: pointer;
+    background: var(--panel);
+    color: var(--app-ink);
+    font: inherit;
+    font-size: 12px;
+    font-weight: 600;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+  }
+  .swatch .dots { display: flex; gap: 3px; }
+  .swatch .dots i { width: 12px; height: 12px; border-radius: 50%; display: block; }
+  .swatch[aria-pressed="true"] { border-color: var(--app-ink); }
+
+  .toggle-row { display: flex; flex-wrap: wrap; gap: 18px; align-items: center; }
+  .toggle { display: flex; align-items: center; gap: 8px; font-size: 14px; cursor: pointer; user-select: none; }
+  .toggle input { width: 17px; height: 17px; accent-color: var(--brand); cursor: pointer; }
+
+  .actions { display: flex; gap: 10px; flex-wrap: wrap; margin-left: auto; }
+  button.btn {
+    font: inherit;
+    font-weight: 700;
+    border: 1px solid var(--panel-line);
+    background: var(--panel);
+    color: var(--app-ink);
+    border-radius: 11px;
+    padding: 10px 16px;
+    cursor: pointer;
+  }
+  button.btn.primary { background: var(--brand); color: var(--brand-ink); border-color: transparent; }
+  button.btn:hover { filter: brightness(0.97); }
+
+  :focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; border-radius: 8px; }
+
+  /* ---------- the printable sheet ---------- */
+  .sheet-wrap { width: min(1040px, 100%); }
+  .sheet {
+    background: var(--ground);
+    color: var(--ink);
+    font-family: var(--font);
+    border-radius: 20px;
+    box-shadow: var(--shadow);
+    padding: 34px 34px 40px;
+    border: 3px solid color-mix(in srgb, var(--ink) 12%, transparent);
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .sheet-head { text-align: center; margin-bottom: 22px; }
+  .doodles { font-size: 22px; letter-spacing: 6px; opacity: 0.85; }
+  .sheet-title {
+    font-size: clamp(30px, 5vw, 46px);
+    margin: 4px 0 2px;
+    line-height: 1.05;
+    outline: none;
+    text-wrap: balance;
+  }
+  .wave { display: block; margin: 0 auto 4px; width: 220px; height: 12px; color: var(--label); }
+  .wave path { stroke: color-mix(in srgb, var(--ink) 45%, transparent); }
+  .sheet-sub {
+    font-size: clamp(16px, 2.4vw, 22px);
+    opacity: 0.8;
+    outline: none;
+    display: inline-block;
+    min-width: 60px;
+  }
+  [contenteditable]:empty::before {
+    content: attr(data-placeholder);
+    opacity: 0.4;
+  }
+
+  .table-scroll { overflow-x: auto; }
+  table.chart {
+    border-collapse: separate;
+    border-spacing: 5px;
+    width: 100%;
+    font-size: clamp(13px, 1.5vw, 17px);
+  }
+  table.chart th, table.chart td {
+    padding: 9px 10px;
+    border-radius: 11px;
+    text-align: center;
+    vertical-align: middle;
+  }
+  table.chart thead th {
+    color: #fff;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    box-shadow: inset 0 -4px 0 rgba(0, 0, 0, 0.12);
+    text-shadow: 0 1px 1px rgba(0, 0, 0, 0.15);
+  }
+  table.chart thead th.corner {
+    background: var(--label) !important;
+    color: var(--labelInk);
+    box-shadow: none;
+    text-shadow: none;
+  }
+  table.chart th.corner,
+  table.chart tbody th {
+    width: var(--name-width);
+    min-width: var(--name-width);
+    max-width: var(--name-width);
+  }
+  table.chart tbody th {
+    text-align: left;
+    background: var(--label);
+    color: var(--labelInk);
+    font-weight: 700;
+    overflow: hidden;
+  }
+  table.chart tbody th .namefit {
+    display: inline-block;
+    white-space: nowrap;
+    line-height: 1.15;
+  }
+  table.chart tbody th .namefit.wrap {
+    display: block;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+  table.chart tbody td {
+    background: var(--rowA);
+    border: 2.5px solid var(--rule);
+  }
+  table.chart td.who { font-weight: 700; }
+  table.chart td.done { width: 1%; }
+  table.chart td.empty { background: var(--rowA); opacity: 0.55; }
+  .tick {
+    display: inline-block;
+    width: 22px; height: 22px;
+    border: 2.5px solid color-mix(in srgb, var(--ink) 55%, transparent);
+    border-radius: 6px;
+    vertical-align: middle;
+    opacity: 0.75;
+  }
+
+  .footnote { text-align: center; margin-top: 16px; font-size: 14px; opacity: 0.6; }
+
+  /* drag-to-reorder */
+  .grip {
+    cursor: grab;
+    user-select: none;
+    opacity: 0.4;
+    margin-right: 8px;
+    letter-spacing: -2px;
+    font-size: 0.95em;
+  }
+  .grip:hover { opacity: 0.7; }
+  .grip:active { cursor: grabbing; }
+  table.chart tbody tr.dragging { opacity: 0.4; }
+  table.chart tbody tr.drop-target th,
+  table.chart tbody tr.drop-target td {
+    box-shadow: inset 0 4px 0 color-mix(in srgb, var(--ink) 55%, transparent);
+  }
+
+  /* inline editing affordance */
+  table.chart td.who { cursor: text; min-width: 2.4em; }
+  [contenteditable] { outline: none; }
+  .sheet [contenteditable]:hover {
+    box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--ink) 22%, transparent);
+  }
+  .sheet [contenteditable]:focus {
+    box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--ink) 55%, transparent);
+  }
+
+  /* add / delete chores + days */
+  table.chart thead th { position: relative; }
+  table.chart tbody th { position: relative; }
+  .rowdel, .daydel {
+    border: 0;
+    background: transparent;
+    cursor: pointer;
+    font: 700 1.15em/1 system-ui, sans-serif;
+    padding: 0 4px;
+    opacity: 0;
+    transition: opacity 0.12s;
+  }
+  .daydel { position: absolute; top: 3px; right: 5px; color: #fff; }
+  .rowdel { position: absolute; top: 3px; right: 5px; color: var(--labelInk); }
+  table.chart thead th:hover .daydel,
+  table.chart tbody tr:hover .rowdel { opacity: 0.85; }
+  .rowdel:hover, .daydel:hover { opacity: 1 !important; transform: scale(1.15); }
+
+  /* toast */
+  .toast {
+    position: fixed;
+    left: 50%;
+    bottom: 24px;
+    transform: translateX(-50%) translateY(20px);
+    background: #222;
+    color: #fff;
+    padding: 12px 18px;
+    border-radius: 12px;
+    font-size: 14px;
+    font-weight: 600;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s, transform 0.2s;
+    z-index: 50;
+    max-width: min(90vw, 460px);
+    text-align: center;
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  /* color-code legend */
+  .legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px 18px;
+    justify-content: center;
+    margin-top: 18px;
+    font-size: 15px;
+    font-weight: 700;
+  }
+  .legend[hidden] { display: none; }
+  .legend .chip { display: inline-flex; align-items: center; gap: 7px; }
+  .legend .chip i { width: 14px; height: 14px; border-radius: 50%; display: block; }
+
+  .sheet-enter { animation: pop 0.4s ease both; }
+  @keyframes pop { from { transform: scale(0.98); opacity: 0; } to { transform: none; opacity: 1; } }
+  @media (prefers-reduced-motion: reduce) { .sheet-enter { animation: none; } }
+
+  /* ---------- print ---------- */
+  @media print {
+    .toolbar, .masthead, .app > .hint { display: none !important; }
+    .app { padding: 0; background: #fff; display: block; }
+    .sheet-wrap { width: 100%; }
+    .sheet {
+      box-shadow: none;
+      border: none;
+      border-radius: 0;
+      margin: 0;
+      padding: 8px 4px;
+    }
+    table.chart tbody td { border-width: 2px; }
+    .grip, .rowdel, .daydel, .toast { display: none !important; }
+    .sheet [contenteditable]:hover, .sheet [contenteditable]:focus { box-shadow: none !important; }
+  }
+</style>
+
+<div class="app">
+  <div class="masthead">
+    <p class="kicker">Fridge-worthy, not spreadsheet-y</p>
+    <h1>The Chore Chart Maker</h1>
+    <p>Drop in a CSV and it turns into a hand-lettered chart you can print for the fridge.</p>
+  </div>
+
+  <div class="toolbar" role="region" aria-label="Chart controls">
+    <label class="dropzone" id="dropzone">
+      <input type="file" id="fileInput" accept=".csv,text/csv" />
+      <div><strong>Choose a CSV file</strong> or drag it here</div>
+      <div class="sub">First row = column headings (e.g. days). First column = chores or names. It's already showing an example below.</div>
+    </label>
+
+    <div class="controls">
+      <div class="field">
+        <label id="paletteLabel">Color mood</label>
+        <div class="swatches" role="group" aria-labelledby="paletteLabel" id="swatches"></div>
+      </div>
+      <div class="field">
+        <label for="fontSelect">Handwriting</label>
+        <select id="fontSelect">
+          <option value='"Chalkboard SE", "Comic Sans MS", cursive'>Chalkboard</option>
+          <option value='"Marker Felt", "Comic Sans MS", cursive'>Felt marker</option>
+          <option value='"Comic Sans MS", "Chalkboard SE", cursive'>Comic</option>
+          <option value='"Noteworthy", "Comic Sans MS", cursive'>Noteworthy</option>
+          <option value='"American Typewriter", "Courier New", monospace'>Typewriter</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="nameWidth">Chore-name width</label>
+        <input type="range" id="nameWidth" min="120" max="440" step="10" value="220" />
+      </div>
+      <div class="field">
+        <label for="nameMode">Long names</label>
+        <select id="nameMode">
+          <option value="shrink">Shrink to one line</option>
+          <option value="wrap">Wrap to two lines</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="orient">Print size</label>
+        <select id="orient">
+          <option value="landscape">Landscape (wide)</option>
+          <option value="portrait">Portrait (tall)</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="toggle-row">
+      <label class="toggle"><input type="checkbox" id="ticks" checked /> Show a "done" box beside each name</label>
+      <label class="toggle"><input type="checkbox" id="codePeople" /> Color-code by person</label>
+      <div class="actions">
+        <button class="btn" id="addChore" type="button">＋ Add chore</button>
+        <button class="btn" id="addDay" type="button">＋ Add day</button>
+        <button class="btn" id="exampleBtn" type="button">Reload example</button>
+        <button class="btn primary" id="printBtn" type="button">Print / Save as PDF</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="sheet-wrap">
+    <div class="sheet sheet-enter" id="sheet">
+      <div class="sheet-head">
+        <div class="doodles" aria-hidden="true">✦ &nbsp; ✿ &nbsp; ✦</div>
+        <h1 class="sheet-title" id="title" contenteditable="true" spellcheck="false" data-placeholder="Our Chores">Our Family Chores</h1>
+        <svg class="wave" viewBox="0 0 220 12" fill="none" aria-hidden="true">
+          <path d="M2 7 Q 15 1, 28 7 T 54 7 T 80 7 T 106 7 T 132 7 T 158 7 T 184 7 T 210 7" stroke-width="3" stroke-linecap="round"/>
+        </svg>
+        <div class="sheet-sub" id="subtitle" contenteditable="true" spellcheck="false" data-placeholder="Week of…">Week of ____</div>
+      </div>
+      <div class="table-scroll">
+        <table class="chart" id="chart"></table>
+      </div>
+      <div class="legend" id="legend" hidden></div>
+      <div class="footnote">You did it! 🌟</div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+</div>
+
+<style id="pageStyle">@page { size: landscape; margin: 0.4in; }</style>
+
+<script>
+  const PALETTES = {
+    lemonade: {
+      name: "Lemonade",
+      ground: "#fffdf5", ink: "#4a3b2a", rowA: "#ffffff", rowB: "#fff6e4",
+      label: "#fceccf", labelInk: "#7a5a2e", rule: "#ead9bc",
+      heads: ["#f4796b", "#f6b93b", "#4fb0c6", "#7bb661", "#9b7ede"],
+    },
+    bubblegum: {
+      name: "Bubblegum",
+      ground: "#fff7fb", ink: "#4a2c4e", rowA: "#ffffff", rowB: "#fdeff7",
+      label: "#f7dcec", labelInk: "#8a3a6b", rule: "#efcfe1",
+      heads: ["#ff7eb6", "#a78bfa", "#67c7eb", "#6fd6a6", "#ffa45c"],
+    },
+    meadow: {
+      name: "Meadow",
+      ground: "#fafbf3", ink: "#33402a", rowA: "#ffffff", rowB: "#f0f5e6",
+      label: "#e3eccf", labelInk: "#4c6033", rule: "#d6e2bd",
+      heads: ["#6ba368", "#8fb339", "#6ec1e4", "#e8734a", "#a56aa8"],
+    },
+  };
+
+  const SAMPLE = `Chore,Mon,Tue,Wed,Thu,Fri,Sat,Sun
+Feed the cat,Ava,Ben,Ava,Ben,Ava,Ben,Ava
+Dishes,Ben,Ava,Ben,Ava,Ben,Ava,Ben
+Take out trash,,,Ava,,,Ben,
+Water the plants,,,,,Ava,,
+Tidy your room,All,All,All,All,All,All,All
+Family movie pick,,,,,,,Dad`;
+
+  // Distinct, cheerful colors for color-coding people (independent of the sheet palette).
+  const PEOPLE_COLORS = ["#e8574c", "#3d8bd4", "#e39a1e", "#5aa84b", "#9b59c9", "#e05fa0", "#12a89d", "#d2683a"];
+
+  let rows = [];
+  let currentPalette = "lemonade";
+  let peopleColors = {};   // name -> color, stable within a loaded sheet
+  let peopleOrder = [];
+  let dragR = null;        // row index currently being dragged
+
+  const $ = (id) => document.getElementById(id);
+  const sheet = $("sheet");
+
+  function personColor(name) {
+    const key = (name || "").trim();
+    if (!key) return null;
+    if (!(key in peopleColors)) {
+      peopleColors[key] = PEOPLE_COLORS[peopleOrder.length % PEOPLE_COLORS.length];
+      peopleOrder.push(key);
+    }
+    return peopleColors[key];
+  }
+
+  function parseCSV(text) {
+    const out = [];
+    let row = [], field = "", inQ = false;
+    for (let i = 0; i < text.length; i++) {
+      const c = text[i];
+      if (inQ) {
+        if (c === '"') {
+          if (text[i + 1] === '"') { field += '"'; i++; }
+          else inQ = false;
+        } else field += c;
+      } else {
+        if (c === '"') inQ = true;
+        else if (c === ",") { row.push(field); field = ""; }
+        else if (c === "\n") { row.push(field); out.push(row); row = []; field = ""; }
+        else if (c === "\r") { /* skip */ }
+        else field += c;
+      }
+    }
+    if (field.length || row.length) { row.push(field); out.push(row); }
+    return out
+      .map((r) => r.map((c) => c.trim()))
+      .filter((r) => r.some((c) => c !== ""));
+  }
+
+  // Drop columns that are empty in every row — e.g. the blank spacer columns
+  // that spreadsheets add between days. A no-op on already-tidy CSVs.
+  function dropEmptyColumns(data) {
+    if (!data.length) return data;
+    const cols = Math.max(...data.map((r) => r.length));
+    const keep = [];
+    for (let c = 0; c < cols; c++) {
+      if (data.some((r) => (r[c] || "").trim() !== "")) keep.push(c);
+    }
+    return data.map((r) => keep.map((c) => r[c] || ""));
+  }
+
+  function applyPalette(key) {
+    const p = PALETTES[key];
+    currentPalette = key;
+    sheet.style.setProperty("--ground", p.ground);
+    sheet.style.setProperty("--ink", p.ink);
+    sheet.style.setProperty("--rowA", p.rowA);
+    sheet.style.setProperty("--rowB", p.rowB);
+    sheet.style.setProperty("--label", p.label);
+    sheet.style.setProperty("--labelInk", p.labelInk);
+    sheet.style.setProperty("--rule", p.rule);
+    document.querySelectorAll(".swatch").forEach((s) =>
+      s.setAttribute("aria-pressed", String(s.dataset.key === key))
+    );
+    renderChart();
+  }
+
+  function dayColorFor(i) {
+    const p = PALETTES[currentPalette];
+    return p.heads[i % p.heads.length];
+  }
+
+  function renderChart() {
+    const table = $("chart");
+    const showDone = $("ticks").checked;
+    table.innerHTML = "";
+    if (!rows.length) return;
+
+    const head = rows[0];
+    const dayCols = [];
+    for (let c = 1; c < head.length; c++) dayCols.push(c);
+
+    // ---- header: an editable colored tab per day ----
+    const thead = document.createElement("thead");
+    const htr = document.createElement("tr");
+    const corner = document.createElement("th");
+    corner.scope = "col";
+    corner.className = "corner";
+    corner.contentEditable = "true";
+    corner.spellcheck = false;
+    corner.dataset.r = 0; corner.dataset.c = 0;
+    corner.textContent = head[0] || "";
+    htr.appendChild(corner);
+    dayCols.forEach((c, i) => {
+      const th = document.createElement("th");
+      th.scope = "col";
+      th.style.background = dayColorFor(i);
+      if (showDone) th.colSpan = 2;
+      const span = document.createElement("span");
+      span.className = "dayname";
+      span.contentEditable = "true";
+      span.spellcheck = false;
+      span.dataset.r = 0; span.dataset.c = c;
+      span.textContent = head[c];
+      const del = document.createElement("button");
+      del.type = "button";
+      del.className = "daydel";
+      del.textContent = "×";
+      del.title = "Delete this day";
+      del.setAttribute("aria-label", "Delete this day column");
+      del.addEventListener("click", () => deleteDay(c));
+      th.appendChild(span);
+      th.appendChild(del);
+      htr.appendChild(th);
+    });
+    thead.appendChild(htr);
+    table.appendChild(thead);
+
+    // ---- body: draggable, editable task rows ----
+    const tbody = document.createElement("tbody");
+    for (let r = 1; r < rows.length; r++) {
+      const tr = document.createElement("tr");
+      tr.dataset.r = r;
+
+      const th = document.createElement("th");
+      th.scope = "row";
+      const grip = document.createElement("span");
+      grip.className = "grip";
+      grip.textContent = "⠿";
+      grip.draggable = true;
+      grip.title = "Drag to reorder";
+      grip.setAttribute("aria-label", "Drag to reorder this chore");
+      const nameSpan = document.createElement("span");
+      nameSpan.className = "namefit";
+      nameSpan.contentEditable = "true";
+      nameSpan.spellcheck = false;
+      nameSpan.dataset.r = r; nameSpan.dataset.c = 0;
+      nameSpan.textContent = rows[r][0] || "";
+      const rowDel = document.createElement("button");
+      rowDel.type = "button";
+      rowDel.className = "rowdel";
+      rowDel.textContent = "×";
+      rowDel.title = "Delete this chore";
+      rowDel.setAttribute("aria-label", "Delete this chore");
+      rowDel.addEventListener("click", () => deleteRow(r));
+      th.appendChild(grip);
+      th.appendChild(nameSpan);
+      th.appendChild(rowDel);
+      tr.appendChild(th);
+      attachDrag(tr, grip, r);
+
+      dayCols.forEach((c, i) => {
+        const who = document.createElement("td");
+        who.className = "who";
+        who.contentEditable = "true";
+        who.spellcheck = false;
+        who.dataset.r = r; who.dataset.c = c; who.dataset.di = i;
+        tr.appendChild(who);
+        if (showDone) {
+          const done = document.createElement("td");
+          done.className = "done";
+          tr.appendChild(done);
+        }
+        styleWho(who); // paints cell + its done box from the model
+      });
+      tbody.appendChild(tr);
+    }
+    table.appendChild(tbody);
+    fitNames();
+    buildLegend();
+  }
+
+  // Paint one "who" cell from the data model — tinted by day, or by person when coding is on.
+  function styleWho(td) {
+    const p = PALETTES[currentPalette];
+    const r = +td.dataset.r, c = +td.dataset.c, di = +td.dataset.di;
+    const coded = $("codePeople").checked;
+    const val = (rows[r][c] || "").trim();
+    if (td.textContent !== val) td.textContent = val;
+    td.classList.toggle("empty", !val);
+    td.style.color = "";
+    if (!val) {
+      td.style.background = "";
+    } else if (coded) {
+      const col = personColor(val);
+      td.style.background = `color-mix(in srgb, ${col} 22%, ${p.rowA})`;
+      td.style.color = `color-mix(in srgb, ${col} 80%, ${p.ink})`;
+    } else {
+      td.style.background = `color-mix(in srgb, ${dayColorFor(di)} 16%, ${p.rowA})`;
+    }
+    if ($("ticks").checked) {
+      const done = td.nextElementSibling;
+      if (done && done.classList.contains("done")) {
+        done.innerHTML = "";
+        done.classList.toggle("empty", !val);
+        if (val) {
+          const box = document.createElement("span");
+          box.className = "tick";
+          done.appendChild(box);
+        }
+      }
+    }
+  }
+
+  // Legend mapping each initial/name to its color (only when color-coding is on).
+  function buildLegend() {
+    const wrap = $("legend");
+    wrap.innerHTML = "";
+    if (!$("codePeople").checked) { wrap.hidden = true; return; }
+    const seen = [];
+    for (let r = 1; r < rows.length; r++)
+      for (let c = 1; c < rows[r].length; c++) {
+        const v = (rows[r][c] || "").trim();
+        if (v && !seen.includes(v)) seen.push(v);
+      }
+    if (!seen.length) { wrap.hidden = true; return; }
+    wrap.hidden = false;
+    seen.forEach((v) => {
+      const chip = document.createElement("span");
+      chip.className = "chip";
+      const dot = document.createElement("i");
+      dot.style.background = personColor(v);
+      chip.appendChild(dot);
+      chip.appendChild(document.createTextNode(v));
+      wrap.appendChild(chip);
+    });
+  }
+
+  function moveRow(from, to) {
+    from = +from; to = +to;
+    if (from === to || from < 1 || to < 1) return;
+    const item = rows.splice(from, 1)[0];
+    rows.splice(to > from ? to - 1 : to, 0, item);
+    renderChart();
+  }
+
+  function attachDrag(tr, grip, r) {
+    grip.addEventListener("dragstart", (e) => {
+      dragR = r;
+      tr.classList.add("dragging");
+      e.dataTransfer.effectAllowed = "move";
+      e.dataTransfer.setData("text/plain", String(r));
+    });
+    grip.addEventListener("dragend", () => {
+      dragR = null;
+      tr.classList.remove("dragging");
+      document.querySelectorAll("#chart tr.drop-target").forEach((x) => x.classList.remove("drop-target"));
+    });
+    tr.addEventListener("dragover", (e) => {
+      if (dragR == null) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = "move";
+      tr.classList.add("drop-target");
+    });
+    tr.addEventListener("dragleave", () => tr.classList.remove("drop-target"));
+    tr.addEventListener("drop", (e) => {
+      e.preventDefault();
+      tr.classList.remove("drop-target");
+      if (dragR != null) moveRow(dragR, +tr.dataset.r);
+    });
+  }
+
+  // Fit each chore name into the chosen column width.
+  //  - "shrink": scale the font down so the whole name sits on one line.
+  //  - "wrap":   let the name wrap, then shrink only if it spills past two lines.
+  function fitNames() {
+    const wrap = $("nameMode").value === "wrap";
+    document.querySelectorAll("#chart .namefit").forEach((span) => {
+      span.style.fontSize = "";
+      span.classList.toggle("wrap", wrap);
+      const th = span.parentElement;
+      const cs = getComputedStyle(th);
+      const avail = th.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+      if (avail <= 0) return;
+
+      if (!wrap) {
+        const natural = span.offsetWidth;
+        if (natural > avail) {
+          const base = parseFloat(getComputedStyle(span).fontSize);
+          span.style.fontSize = Math.max(7, base * (avail / natural)) + "px";
+        }
+        return;
+      }
+
+      // wrap mode: step the font down until the text fits within two lines
+      let guard = 0;
+      while (guard++ < 60) {
+        const fs = parseFloat(getComputedStyle(span).fontSize);
+        const twoLines = fs * 1.15 * 2 + 1;
+        if (span.scrollHeight <= twoLines || fs <= 8) break;
+        span.style.fontSize = fs - 0.5 + "px";
+      }
+    });
+  }
+
+  function loadText(text) {
+    const parsed = dropEmptyColumns(parseCSV(text));
+    if (!parsed.length) { alert("That file didn't have any rows I could read. Make sure it's a CSV."); return; }
+    rows = parsed;
+    peopleColors = {}; peopleOrder = []; // re-assign people colors for the new sheet
+    sheet.classList.remove("sheet-enter"); void sheet.offsetWidth; sheet.classList.add("sheet-enter");
+    renderChart();
+  }
+
+  // build swatches
+  const swatchWrap = $("swatches");
+  Object.entries(PALETTES).forEach(([key, p]) => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "swatch";
+    b.dataset.key = key;
+    b.setAttribute("aria-pressed", "false");
+    const dots = document.createElement("span");
+    dots.className = "dots";
+    p.heads.slice(0, 4).forEach((h) => {
+      const i = document.createElement("i");
+      i.style.background = h;
+      dots.appendChild(i);
+    });
+    const name = document.createElement("span");
+    name.textContent = p.name;
+    b.appendChild(dots);
+    b.appendChild(name);
+    b.addEventListener("click", () => applyPalette(key));
+    swatchWrap.appendChild(b);
+  });
+
+  // file input + drag/drop
+  const dz = $("dropzone");
+  $("fileInput").addEventListener("change", (e) => {
+    const f = e.target.files[0];
+    if (!f) return;
+    const reader = new FileReader();
+    reader.onload = () => loadText(reader.result);
+    reader.readAsText(f);
+  });
+  ["dragenter", "dragover"].forEach((ev) =>
+    dz.addEventListener(ev, (e) => { e.preventDefault(); dz.classList.add("drag"); })
+  );
+  ["dragleave", "drop"].forEach((ev) =>
+    dz.addEventListener(ev, (e) => { e.preventDefault(); dz.classList.remove("drag"); })
+  );
+  dz.addEventListener("drop", (e) => {
+    const f = e.dataTransfer.files[0];
+    if (!f) return;
+    const reader = new FileReader();
+    reader.onload = () => loadText(reader.result);
+    reader.readAsText(f);
+  });
+
+  // controls
+  $("fontSelect").addEventListener("change", (e) => {
+    sheet.style.setProperty("--font", e.target.value);
+    fitNames();
+  });
+  $("nameWidth").addEventListener("input", (e) => {
+    sheet.style.setProperty("--name-width", e.target.value + "px");
+    fitNames();
+  });
+  $("nameMode").addEventListener("change", fitNames);
+  $("orient").addEventListener("change", (e) => {
+    $("pageStyle").textContent = `@page { size: ${e.target.value}; margin: 0.4in; }`;
+  });
+  $("ticks").addEventListener("change", renderChart);
+  $("codePeople").addEventListener("change", renderChart);
+  $("exampleBtn").addEventListener("click", () => loadText(SAMPLE));
+  $("printBtn").addEventListener("click", printSheet);
+
+  // ---- inline editing: keep the data model in sync with the sheet ----
+  $("chart").addEventListener("input", (e) => {
+    const el = e.target;
+    if (el.dataset.r === undefined || el.dataset.c === undefined) return;
+    const r = +el.dataset.r, c = +el.dataset.c;
+    if (rows[r]) rows[r][c] = el.textContent;
+  });
+  $("chart").addEventListener("focusout", (e) => {
+    const el = e.target;
+    if (el.classList.contains("namefit")) {
+      fitNames();
+    } else if (el.classList.contains("who")) {
+      styleWho(el);   // re-tint this cell + refresh its done box
+      buildLegend();  // a newly typed name may need a legend entry
+    }
+  });
+  // Enter confirms an edit instead of inserting a newline.
+  $("chart").addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && e.target.isContentEditable) { e.preventDefault(); e.target.blur(); }
+  });
+
+  // ---- add / remove chores and days ----
+  function focusName(rowIndex) {
+    const rowsEls = document.querySelectorAll("#chart tbody tr");
+    const tr = rowsEls[rowIndex - 1];
+    const span = tr && tr.querySelector(".namefit");
+    if (span) {
+      span.focus();
+      const sel = window.getSelection(), range = document.createRange();
+      range.selectNodeContents(span); sel.removeAllRanges(); sel.addRange(range);
+    }
+  }
+  function addChore() {
+    if (!rows.length) return;
+    rows.push(new Array(rows[0].length).fill(""));
+    renderChart();
+    focusName(rows.length - 1);
+  }
+  function addDay() {
+    if (!rows.length) return;
+    rows[0].push("New");
+    for (let r = 1; r < rows.length; r++) rows[r].push("");
+    renderChart();
+  }
+  function deleteRow(r) {
+    if (rows.length <= 2) { toast("A chart needs at least one chore."); return; }
+    rows.splice(r, 1);
+    renderChart();
+  }
+  function deleteDay(c) {
+    if (rows[0].length <= 2) { toast("A chart needs at least one day."); return; }
+    rows.forEach((row) => row.splice(c, 1));
+    renderChart();
+  }
+  $("addChore").addEventListener("click", addChore);
+  $("addDay").addEventListener("click", addDay);
+
+  // small non-blocking status message (alert() is blocked in the preview frame)
+  let toastTimer = null;
+  function toast(msg) {
+    const t = $("toast");
+    t.textContent = msg;
+    t.classList.add("show");
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => t.classList.remove("show"), 4200);
+  }
+
+  // ---- print / save as PDF ----
+  function escapeHtml(s) {
+    return s.replace(/[&<>"]/g, (m) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[m]));
+  }
+  function docTitle() { return $("title").textContent.trim() || "Chore Chart"; }
+
+  function buildPrintDoc() {
+    const src = $("sheet");
+    const clone = src.cloneNode(true);
+    clone.classList.remove("sheet-enter");
+    const cs = getComputedStyle(src);
+    const vars = ["--ground", "--ink", "--rowA", "--rowB", "--label", "--labelInk", "--rule", "--font", "--name-width"];
+    const varStr = vars.map((v) => `${v}:${cs.getPropertyValue(v).trim()};`).join("");
+    const baseCSS = document.querySelector("style").textContent;
+    return (
+      `<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(docTitle())}</title>` +
+      `<style>${baseCSS}</style>` +
+      `<style>@page{size:${$("orient").value};margin:0.4in;}` +
+      `html,body{margin:0;background:#fff;}:root{${varStr}}` +
+      `.sheet{box-shadow:none!important;border:none!important;margin:0;width:100%;}` +
+      `.grip,.rowdel,.daydel{display:none!important;}[contenteditable]{outline:none!important;box-shadow:none!important;}` +
+      `.print-bar{position:sticky;top:0;z-index:9;display:flex;gap:12px;align-items:center;justify-content:center;` +
+      `padding:12px;background:#222;color:#fff;font:600 14px/1.3 system-ui,sans-serif;}` +
+      `.print-bar button{font:inherit;background:#fff;color:#222;border:0;border-radius:8px;padding:8px 16px;cursor:pointer;}` +
+      `@media print{.print-bar{display:none!important;}}</style>` +
+      `</head><body>` +
+      `<div class="print-bar">Ready to print — choose “Save as PDF” or your printer.` +
+      `<button onclick="window.print()">Print now</button></div>` +
+      clone.outerHTML +
+      `</body></html>`
+    );
+  }
+
+  function printSheet() {
+    const html = buildPrintDoc();
+    // 1) A real window prints reliably (works on the deployed site and permissive browsers).
+    let w = null;
+    try { w = window.open("", "_blank"); } catch (e) { /* blocked */ }
+    if (w && w.document) {
+      w.document.open(); w.document.write(html); w.document.close();
+      const go = () => { try { w.focus(); w.print(); } catch (e) {} };
+      if (w.document.readyState === "complete") setTimeout(go, 350);
+      else w.onload = () => setTimeout(go, 250);
+      return;
+    }
+    // 2) Top-level page but pop-up blocked → print in place.
+    if (window.self === window.top) { document.title = docTitle(); window.print(); return; }
+    // 3) Sandboxed preview → save a ready-to-print page the user opens and prints.
+    downloadPrintable(html);
+  }
+
+  function downloadPrintable(html) {
+    try {
+      const blob = new Blob([html], { type: "text/html" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = docTitle().replace(/[^\w\- ]+/g, "").trim().replace(/\s+/g, "-") + ".html";
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
+      toast("Saved a printable page to Downloads — open it and press ⌘P / Ctrl+P.");
+    } catch (e) {
+      toast("Printing is blocked in this preview. It works on the deployed site.");
+    }
+  }
+
+  // init
+  applyPalette("lemonade");
+  loadText(SAMPLE);
+</script>
+
+</body>
+</html>

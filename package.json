@@ -1,0 +1,12 @@
+{
+  "name": "chore-chart",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Turn a CSV into a whimsical printable chore chart for the fridge.",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
