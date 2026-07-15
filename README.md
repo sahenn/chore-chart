@@ -18,18 +18,20 @@ Deployed from the `main` branch (root) of **github.com/sahenn/chore-chart**:
 
 ### Updating the live site
 
-Commits/pushes here go under the **`sahenn`** GitHub account. If your active `gh`
-account is something else, switch first, push, then switch back:
+This repo lives under the **`sahenn`** GitHub account, but the macOS keychain hands
+git the *other* account's credentials, so a plain `git push` gets a 403. Push with
+`sahenn`'s token instead (read straight from the `gh` keyring, used only for that one
+command — never stored):
 
 ```bash
 cd chore-chart
-gh auth switch --user sahenn      # push as sahenn
 git add -A && git commit -m "Update chart"
-git push
-gh auth switch --user scott-henn  # back to your default
+TOKEN=$(gh auth token --user sahenn)
+git push "https://x-access-token:${TOKEN}@github.com/sahenn/chore-chart.git" main
 ```
 
-Pages rebuilds automatically a few seconds after each push.
+Pages rebuilds automatically a few seconds after each push. (No account switching
+needed — `gh auth token --user sahenn` works regardless of which account is active.)
 
 > **Note:** Printing works when the app runs as a normal website (like the Railway URL).
 > It's only blocked inside the Claude preview sandbox.
