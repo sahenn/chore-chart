@@ -5,9 +5,31 @@ inline, drag chores to reorder, color-code by person, add/remove chores and days
 print or save as PDF.
 
 - `index.html` — the whole app (self-contained: HTML + CSS + JS, no build step)
-- `server.js` — tiny zero-dependency static server (serves `index.html`)
+- `.nojekyll` — tells GitHub Pages to serve files as-is
+- `server.js` — tiny zero-dependency static server (only needed for Railway)
 - `package.json` — `npm start` runs the server; Railway provides `PORT`
 - `railway.json` — Railway build/deploy config
+
+## Live site (GitHub Pages)
+
+Deployed from the `main` branch (root) of **github.com/sahenn/chore-chart**:
+
+**https://sahenn.github.io/chore-chart/**
+
+### Updating the live site
+
+Commits/pushes here go under the **`sahenn`** GitHub account. If your active `gh`
+account is something else, switch first, push, then switch back:
+
+```bash
+cd chore-chart
+gh auth switch --user sahenn      # push as sahenn
+git add -A && git commit -m "Update chart"
+git push
+gh auth switch --user scott-henn  # back to your default
+```
+
+Pages rebuilds automatically a few seconds after each push.
 
 > **Note:** Printing works when the app runs as a normal website (like the Railway URL).
 > It's only blocked inside the Claude preview sandbox.
