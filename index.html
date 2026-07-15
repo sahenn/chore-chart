@@ -406,7 +406,17 @@
   }
   .legend[hidden] { display: none; }
   .legend .chip { display: inline-flex; align-items: center; gap: 7px; }
-  .legend .chip i { width: 14px; height: 14px; border-radius: 50%; display: block; }
+  .legend .personcolor {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    border: 2px solid rgba(0, 0, 0, 0.15);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+    padding: 0;
+    cursor: pointer;
+    transition: transform 0.12s;
+  }
+  .legend .personcolor:hover { transform: scale(1.2); }
 
   .sheet-enter { animation: pop 0.4s ease both; }
   @keyframes pop { from { transform: scale(0.98); opacity: 0; } to { transform: none; opacity: 1; } }
@@ -519,7 +529,7 @@
       </div>
     </div>
 
-    <p class="hint-line">Tip: tap or hover a day heading to recolor it 🎨 or remove it ✕. Choose “Plain” above for no colors. Drag the ⠿ handle to reorder chores.</p>
+    <p class="hint-line">Tip: tap or hover a day heading to recolor it 🎨 or remove it ✕. Choose “Plain” above for no colors. Drag the ⠿ handle to reorder chores. With “Color-code by person” on, click a swatch in the key below to pick that person’s color.</p>
 
     <div class="toggle-row">
       <label class="toggle"><input type="checkbox" id="ticks" checked /> Show a "done" box beside each name</label>
@@ -554,6 +564,7 @@
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
   <input type="color" id="dayColorPicker" class="vh" aria-hidden="true" tabindex="-1" value="#f4796b" />
+  <input type="color" id="personColorPicker" class="vh" aria-hidden="true" tabindex="-1" value="#e8574c" />
 </div>
 
 <style id="pageStyle">@page { size: landscape; margin: 0.4in; }</style>
@@ -604,6 +615,7 @@ Family movie pick,,,,,,,Dad`;
   let dragR = null;           // row index currently being dragged
   let dayColorOverrides = {}; // day index -> custom hex color
   let pickerTarget = null;    // day index currently being recolored
+  let personPickerTarget = null; // person name currently being recolored
 
   const $ = (id) => document.getElementById(id);
   const sheet = $("sheet");
@@ -863,11 +875,36 @@ Family movie pick,,,,,,,Dad`;
     seen.forEach((v) => {
       const chip = document.createElement("span");
       chip.className = "chip";
-      const dot = document.createElement("i");
+      const dot = document.createElement("button");
+      dot.type = "button";
+      dot.className = "personcolor";
+      dot.dataset.name = v;
+      dot.title = `Pick ${v}'s color`;
+      dot.setAttribute("aria-label", `Pick a color for ${v}`);
       dot.style.background = personColor(v);
+      dot.addEventListener("click", () => openPersonColor(v));
       chip.appendChild(dot);
       chip.appendChild(document.createTextNode(v));
       wrap.appendChild(chip);
+    });
+  }
+
+  function openPersonColor(name) {
+    const picker = $("personColorPicker");
+    personPickerTarget = name;
+    const cur = personColor(name);
+    picker.value = /^#[0-9a-fA-F]{6}$/.test(cur) ? cur : "#e8574c";
+    picker.click();
+  }
+
+  // Re-tint every cell for one person + their legend swatch, in place.
+  function recolorPerson(name) {
+    document.querySelectorAll("#chart td.who").forEach((td) => {
+      const r = +td.dataset.r, c = +td.dataset.c;
+      if (((rows[r] && rows[r][c]) || "").trim() === name) styleWho(td);
+    });
+    document.querySelectorAll("#legend .personcolor").forEach((dot) => {
+      if (dot.dataset.name === name) dot.style.background = peopleColors[name];
     });
   }
 
@@ -1023,6 +1060,11 @@ Family movie pick,,,,,,,Dad`;
     if (pickerTarget == null) return;
     dayColorOverrides[pickerTarget] = $("dayColorPicker").value;
     recolorDay(pickerTarget); // re-tint in place so the picker stays open
+  });
+  $("personColorPicker").addEventListener("input", () => {
+    if (personPickerTarget == null) return;
+    peopleColors[personPickerTarget] = $("personColorPicker").value;
+    recolorPerson(personPickerTarget); // re-tint in place so the picker stays open
   });
   $("exampleBtn").addEventListener("click", () => loadText(SAMPLE));
   $("printBtn").addEventListener("click", printSheet);
