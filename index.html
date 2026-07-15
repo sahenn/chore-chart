@@ -307,6 +307,8 @@
     margin-right: 8px;
     letter-spacing: -2px;
     font-size: 0.95em;
+    touch-action: none; /* let the grip drag on touch without scrolling the page */
+    -webkit-user-select: none;
   }
   .grip:hover { opacity: 0.7; }
   .grip:active { cursor: grabbing; }
@@ -407,6 +409,35 @@
   @keyframes pop { from { transform: scale(0.98); opacity: 0; } to { transform: none; opacity: 1; } }
   @media (prefers-reduced-motion: reduce) { .sheet-enter { animation: none; } }
 
+  /* ---------- touch devices: no hover, so keep tap controls visible ---------- */
+  @media (hover: none) {
+    .grip { opacity: 0.6; }
+    .daycolor, .daydel, .rowdel { opacity: 0.7; }
+  }
+
+  /* ---------- mobile / small screens ---------- */
+  @media (max-width: 680px) {
+    .app { padding: 16px 10px 40px; gap: 16px; }
+    .masthead .kicker { font-size: 11px; }
+    .toolbar { padding: 14px; border-radius: 14px; gap: 14px; }
+    .dropzone { padding: 16px 12px; }
+    .dropzone .sub { font-size: 12px; }
+    .controls { grid-template-columns: 1fr 1fr; gap: 12px; }
+    .field.palette { grid-column: 1 / -1; }
+    .swatch { flex: 1 1 44%; min-width: 0; }
+    .toggle-row { flex-direction: column; align-items: stretch; gap: 12px; }
+    .actions { margin-left: 0; width: 100%; }
+    .actions .btn { flex: 1 1 auto; }
+    .sheet { padding: 18px 12px 24px; border-radius: 16px; }
+    .doodles { font-size: 18px; }
+    table.chart { font-size: 15px; }
+  }
+  @media (max-width: 420px) {
+    .controls { grid-template-columns: 1fr; }
+    .swatch { flex: 1 1 100%; }
+    .masthead p { font-size: 14px; }
+  }
+
   /* ---------- print ---------- */
   @media print {
     .toolbar, .masthead, .app > .hint { display: none !important; }
@@ -474,7 +505,7 @@
       </div>
     </div>
 
-    <p class="hint-line">Tip: hover a day heading to recolor it 🎨 or remove it ✕. Choose “Plain” above for no colors.</p>
+    <p class="hint-line">Tip: tap or hover a day heading to recolor it 🎨 or remove it ✕. Choose “Plain” above for no colors. Drag the ⠿ handle to reorder chores.</p>
 
     <div class="toggle-row">
       <label class="toggle"><input type="checkbox" id="ticks" checked /> Show a "done" box beside each name</label>
@@ -727,7 +758,6 @@ Family movie pick,,,,,,,Dad`;
       const grip = document.createElement("span");
       grip.className = "grip";
       grip.textContent = "⠿";
-      grip.draggable = true;
       grip.title = "Drag to reorder";
       grip.setAttribute("aria-label", "Drag to reorder this chore");
       const nameSpan = document.createElement("span");
@@ -834,29 +864,36 @@ Family movie pick,,,,,,,Dad`;
     renderChart();
   }
 
+  // Pointer-based reorder so it works with both mouse and touch (mobile).
   function attachDrag(tr, grip, r) {
-    grip.addEventListener("dragstart", (e) => {
+    grip.addEventListener("pointerdown", (e) => {
+      e.preventDefault();
       dragR = r;
       tr.classList.add("dragging");
-      e.dataTransfer.effectAllowed = "move";
-      e.dataTransfer.setData("text/plain", String(r));
-    });
-    grip.addEventListener("dragend", () => {
-      dragR = null;
-      tr.classList.remove("dragging");
-      document.querySelectorAll("#chart tr.drop-target").forEach((x) => x.classList.remove("drop-target"));
-    });
-    tr.addEventListener("dragover", (e) => {
-      if (dragR == null) return;
-      e.preventDefault();
-      e.dataTransfer.dropEffect = "move";
-      tr.classList.add("drop-target");
-    });
-    tr.addEventListener("dragleave", () => tr.classList.remove("drop-target"));
-    tr.addEventListener("drop", (e) => {
-      e.preventDefault();
-      tr.classList.remove("drop-target");
-      if (dragR != null) moveRow(dragR, +tr.dataset.r);
+      try { grip.setPointerCapture(e.pointerId); } catch (err) {}
+
+      const clearTargets = () =>
+        document.querySelectorAll("#chart tr.drop-target").forEach((x) => x.classList.remove("drop-target"));
+
+      const move = (ev) => {
+        const el = document.elementFromPoint(ev.clientX, ev.clientY);
+        const over = el && el.closest("#chart tbody tr");
+        clearTargets();
+        if (over && over !== tr) over.classList.add("drop-target");
+      };
+      const finish = () => {
+        const target = document.querySelector("#chart tr.drop-target");
+        clearTargets();
+        tr.classList.remove("dragging");
+        grip.removeEventListener("pointermove", move);
+        grip.removeEventListener("pointerup", finish);
+        grip.removeEventListener("pointercancel", finish);
+        if (target && dragR != null) moveRow(dragR, +target.dataset.r);
+        dragR = null;
+      };
+      grip.addEventListener("pointermove", move);
+      grip.addEventListener("pointerup", finish);
+      grip.addEventListener("pointercancel", finish);
     });
   }
 
