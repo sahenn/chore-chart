@@ -137,7 +137,8 @@
     font-weight: 700;
     color: var(--app-muted);
   }
-  select {
+  select,
+  input[type="number"] {
     font: inherit;
     padding: 9px 10px;
     border-radius: 10px;
@@ -145,7 +146,9 @@
     background: var(--panel);
     color: var(--app-ink);
     cursor: pointer;
+    width: 100%;
   }
+  input[type="number"]:disabled { opacity: 0.5; cursor: not-allowed; }
   input[type="range"] {
     width: 100%;
     accent-color: var(--brand);
@@ -502,6 +505,17 @@
           <option value="landscape">Landscape (wide)</option>
           <option value="portrait">Portrait (tall)</option>
         </select>
+      </div>
+      <div class="field">
+        <label for="wideMode">Big charts</label>
+        <select id="wideMode">
+          <option value="fit">Shrink to one page</option>
+          <option value="split">Split across pages</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="daysPerPage">Days / page</label>
+        <input type="number" id="daysPerPage" min="1" max="20" value="4" disabled />
       </div>
     </div>
 
@@ -1000,6 +1014,9 @@ Family movie pick,,,,,,,Dad`;
   $("orient").addEventListener("change", (e) => {
     $("pageStyle").textContent = `@page { size: ${e.target.value}; margin: 0.4in; }`;
   });
+  $("wideMode").addEventListener("change", (e) => {
+    $("daysPerPage").disabled = e.target.value !== "split";
+  });
   $("ticks").addEventListener("change", renderChart);
   $("codePeople").addEventListener("change", renderChart);
   $("dayColorPicker").addEventListener("input", () => {
@@ -1115,19 +1132,55 @@ Family movie pick,,,,,,,Dad`;
   }
   function docTitle() { return $("title").textContent.trim() || "Chore Chart"; }
 
-  function buildPrintDoc() {
-    const src = $("sheet");
+  // Build one printable sheet keeping only the day columns in keepSet.
+  // The chore-name column and the title/header ride along on every page.
+  function sheetChunkHTML(src, keepSet, showDone) {
     const clone = src.cloneNode(true);
     clone.classList.remove("sheet-enter");
+    clone.querySelectorAll("thead th[data-di]").forEach((th) => {
+      if (!keepSet.has(+th.dataset.di)) th.remove();
+    });
+    clone.querySelectorAll("tbody td.who").forEach((td) => {
+      if (!keepSet.has(+td.dataset.di)) {
+        const done = td.nextElementSibling;
+        if (showDone && done && done.classList.contains("done")) done.remove();
+        td.remove();
+      }
+    });
+    return clone.outerHTML;
+  }
+
+  function buildPrintDoc() {
+    const src = $("sheet");
     const cs = getComputedStyle(src);
     const vars = ["--ground", "--ink", "--rowA", "--rowB", "--label", "--labelInk", "--rule", "--font", "--name-width"];
     const varStr = vars.map((v) => `${v}:${cs.getPropertyValue(v).trim()};`).join("");
     const baseCSS = document.querySelector("style").textContent;
+    const showDone = $("ticks").checked;
+    const dayCount = src.querySelectorAll("thead th[data-di]").length;
+
+    // Split the day columns across pages when asked (and when it's actually wide).
+    const perPage = Math.max(1, Math.min(20, parseInt($("daysPerPage").value, 10) || 4));
+    const pages = [];
+    if ($("wideMode").value === "split" && dayCount > perPage) {
+      for (let start = 0; start < dayCount; start += perPage) {
+        const keep = new Set();
+        for (let i = start; i < Math.min(start + perPage, dayCount); i++) keep.add(i);
+        pages.push(sheetChunkHTML(src, keep, showDone));
+      }
+    } else {
+      const clone = src.cloneNode(true);
+      clone.classList.remove("sheet-enter");
+      pages.push(clone.outerHTML);
+    }
+    const bodyPages = pages.map((h) => `<div class="page">${h}</div>`).join("");
+
     return (
       `<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(docTitle())}</title>` +
       `<style>${baseCSS}</style>` +
       `<style>@page{size:${$("orient").value};margin:0.4in;}` +
       `html,body{margin:0;background:#fff;}:root{${varStr}}` +
+      `.page{width:100%;}.page + .page{page-break-before:always;}` +
       `.sheet{box-shadow:none!important;border:none!important;margin:0;width:100%;}` +
       `.grip,.rowdel,.daydel,.daycolor{display:none!important;}[contenteditable]{outline:none!important;box-shadow:none!important;}` +
       `.print-bar{position:sticky;top:0;z-index:9;display:flex;gap:12px;align-items:center;justify-content:center;` +
@@ -1137,7 +1190,7 @@ Family movie pick,,,,,,,Dad`;
       `</head><body>` +
       `<div class="print-bar">Ready to print — choose “Save as PDF” or your printer.` +
       `<button onclick="window.print()">Print now</button></div>` +
-      clone.outerHTML +
+      bodyPages +
       `</body></html>`
     );
   }
