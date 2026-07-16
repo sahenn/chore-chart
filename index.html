@@ -1094,13 +1094,35 @@ Family movie pick,,,,,,,Dad`;
   }
 
   function loadText(text) {
-    const parsed = dropEmptyColumns(parseCSV(text));
-    if (!parsed.length) { alert("That file didn't have any rows I could read. Make sure it's a CSV."); return; }
+    const all = parseCSV(text);
+    if (!all.length) { alert("That file didn't have any rows I could read. Make sure it's a CSV."); return; }
+
+    // Split off a weekly section if this CSV has one (from a previous export).
+    let dailyRows = all, weeklyLoaded = null;
+    const wi = all.findIndex((r) => (r[0] || "").trim() === "__WEEKLY__");
+    if (wi !== -1) {
+      dailyRows = all.slice(0, wi);
+      const title = (all[wi][1] || "").trim();
+      const items = all.slice(wi + 1).map((r) => ({
+        name: (r[0] || "").trim(),
+        who: (r[1] || "").trim(),
+        done: /^(done|yes|true|x|✓)$/i.test((r[2] || "").trim()),
+      })).filter((it) => it.name || it.who);
+      weeklyLoaded = { title, items };
+    }
+
+    const parsed = dropEmptyColumns(dailyRows);
+    if (!parsed.length) { alert("That file didn't have any day columns I could read."); return; }
     rows = parsed;
     peopleColors = {}; peopleOrder = []; // re-assign people colors for the new sheet
     dayColorOverrides = {};              // start fresh with the palette's day colors
+    if (weeklyLoaded) {
+      weekly = weeklyLoaded.items;
+      if (weeklyLoaded.title) $("weeklyTitle").textContent = weeklyLoaded.title;
+    }
     sheet.classList.remove("sheet-enter"); void sheet.offsetWidth; sheet.classList.add("sheet-enter");
     renderChart();
+    renderWeekly();
   }
 
   // build swatches
@@ -1332,10 +1354,22 @@ Family movie pick,,,,,,,Dad`;
       )
       .join("\r\n");
   }
+  // The daily grid, plus the weekly checklist appended after a sentinel row so it round-trips.
+  function buildExportRows() {
+    const out = rows.map((r) => r.slice());
+    if (weekly.length) {
+      const title = $("weeklyTitle").textContent.trim() || "Once a Week";
+      out.push([]); // blank separator line
+      out.push(["__WEEKLY__", title]);
+      weekly.forEach((w) => out.push([w.name || "", w.who || "", w.done ? "done" : ""]));
+    }
+    return out;
+  }
+
   function downloadCSV() {
     if (!rows.length) { toast("Nothing to download yet."); return; }
     try {
-      const blob = new Blob([toCSV(rows)], { type: "text/csv" });
+      const blob = new Blob([toCSV(buildExportRows())], { type: "text/csv" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
