@@ -418,6 +418,77 @@
   }
   .legend .personcolor:hover { transform: scale(1.2); }
 
+  /* once-a-week checklist */
+  .weekly-block { margin-top: 26px; }
+  .weekly-title {
+    text-align: center;
+    font-size: clamp(20px, 3.2vw, 30px);
+    margin-bottom: 14px;
+    outline: none;
+    text-wrap: balance;
+  }
+  .weekly-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 10px;
+  }
+  .weekly-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: var(--rowA);
+    border: 2.5px solid var(--rule);
+    border-radius: 13px;
+    padding: 9px 12px;
+  }
+  .weekly-item.done .wname { text-decoration: line-through; opacity: 0.5; }
+  .wcheck {
+    flex: 0 0 auto;
+    width: 26px;
+    height: 26px;
+    border-radius: 8px;
+    border: 2.5px solid color-mix(in srgb, var(--ink) 45%, transparent);
+    background: transparent;
+    cursor: pointer;
+    position: relative;
+    padding: 0;
+  }
+  .wcheck[aria-pressed="true"] { background: color-mix(in srgb, var(--ink) 8%, transparent); }
+  .wcheck[aria-pressed="true"]::after {
+    content: "✓";
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 19px;
+    color: var(--ink);
+  }
+  .wname { flex: 1 1 auto; font-weight: 600; outline: none; min-width: 2em; }
+  .wwho {
+    flex: 0 0 auto;
+    font-size: 0.82em;
+    padding: 3px 10px;
+    border-radius: 999px;
+    background: var(--label);
+    color: var(--labelInk);
+    outline: none;
+    min-width: 2.2em;
+    text-align: center;
+  }
+  .wdel {
+    flex: 0 0 auto;
+    border: 0;
+    background: transparent;
+    color: var(--labelInk);
+    font: 700 1.1em/1 system-ui, sans-serif;
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity 0.12s;
+  }
+  .weekly-item:hover .wdel { opacity: 0.6; }
+  .wdel:hover { opacity: 1 !important; }
+
   .sheet-enter { animation: pop 0.4s ease both; }
   @keyframes pop { from { transform: scale(0.98); opacity: 0; } to { transform: none; opacity: 1; } }
   @media (prefers-reduced-motion: reduce) { .sheet-enter { animation: none; } }
@@ -425,7 +496,7 @@
   /* ---------- touch devices: no hover, so keep tap controls visible ---------- */
   @media (hover: none) {
     .grip { opacity: 0.6; }
-    .daycolor, .daydel, .rowdel { opacity: 0.7; }
+    .daycolor, .daydel, .rowdel, .wdel { opacity: 0.7; }
   }
 
   /* ---------- mobile / small screens ---------- */
@@ -464,8 +535,9 @@
       padding: 8px 4px;
     }
     table.chart tbody td { border-width: 2px; }
-    .grip, .rowdel, .daydel, .daycolor, .toast { display: none !important; }
+    .grip, .rowdel, .daydel, .daycolor, .wdel, .toast { display: none !important; }
     .sheet [contenteditable]:hover, .sheet [contenteditable]:focus { box-shadow: none !important; }
+    [contenteditable]:empty::before { content: "" !important; }
   }
 </style>
 
@@ -540,6 +612,7 @@
       <div class="actions">
         <button class="btn" id="addChore" type="button">＋ Add chore</button>
         <button class="btn" id="addDay" type="button">＋ Add day</button>
+        <button class="btn" id="addWeekly" type="button">＋ Weekly chore</button>
         <button class="btn" id="exampleBtn" type="button">Reload example</button>
         <button class="btn" id="downloadCsv" type="button">⤓ Download CSV</button>
         <button class="btn primary" id="printBtn" type="button">Print / Save as PDF</button>
@@ -561,6 +634,12 @@
         <table class="chart" id="chart"></table>
       </div>
       <div class="legend" id="legend" hidden></div>
+
+      <div class="weekly-block" id="weekly" hidden>
+        <div class="weekly-title" id="weeklyTitle" contenteditable="true" spellcheck="false" data-placeholder="Once a Week">Once a Week</div>
+        <div class="weekly-list" id="weeklyList"></div>
+      </div>
+
       <div class="footnote">You did it! 🌟</div>
     </div>
   </div>
@@ -643,6 +722,7 @@ Family movie pick,,,,,,,Dad`;
   let dayColorOverrides = {}; // day index -> custom hex color
   let pickerTarget = null;    // day index currently being recolored
   let personPickerTarget = null; // person name currently being recolored
+  let weekly = [];            // once-a-week chores: {name, who, done}
 
   const $ = (id) => document.getElementById(id);
   const sheet = $("sheet");
@@ -897,6 +977,10 @@ Family movie pick,,,,,,,Dad`;
         const v = (rows[r][c] || "").trim();
         if (v && !seen.includes(v)) seen.push(v);
       }
+    weekly.forEach((it) => {
+      const v = (it.who || "").trim();
+      if (v && !seen.includes(v)) seen.push(v);
+    });
     if (!seen.length) { wrap.hidden = true; return; }
     wrap.hidden = false;
     seen.forEach((v) => {
@@ -1083,7 +1167,7 @@ Family movie pick,,,,,,,Dad`;
     $("daysPerPage").disabled = e.target.value !== "split";
   });
   $("ticks").addEventListener("change", renderChart);
-  $("codePeople").addEventListener("change", renderChart);
+  $("codePeople").addEventListener("change", () => { renderChart(); renderWeekly(); });
   $("dayColorPicker").addEventListener("input", () => {
     if (pickerTarget == null) return;
     dayColorOverrides[pickerTarget] = $("dayColorPicker").value;
@@ -1156,6 +1240,85 @@ Family movie pick,,,,,,,Dad`;
   $("addChore").addEventListener("click", addChore);
   $("addDay").addEventListener("click", addDay);
 
+  // ---- once-a-week chores (a simple tick-off checklist) ----
+  function renderWeekly() {
+    const block = $("weekly"), list = $("weeklyList");
+    list.innerHTML = "";
+    if (!weekly.length) { block.hidden = true; return; }
+    block.hidden = false;
+    const coded = $("codePeople").checked;
+    weekly.forEach((item, idx) => {
+      const row = document.createElement("div");
+      row.className = "weekly-item" + (item.done ? " done" : "");
+
+      const cb = document.createElement("button");
+      cb.type = "button";
+      cb.className = "wcheck";
+      cb.setAttribute("aria-pressed", String(!!item.done));
+      cb.title = "Mark done for the week";
+      cb.setAttribute("aria-label", "Mark done for the week");
+      cb.addEventListener("click", () => { weekly[idx].done = !weekly[idx].done; renderWeekly(); });
+
+      const name = document.createElement("span");
+      name.className = "wname";
+      name.contentEditable = "true";
+      name.spellcheck = false;
+      name.dataset.wi = idx; name.dataset.wf = "name";
+      name.setAttribute("data-placeholder", "New weekly chore");
+      name.textContent = item.name || "";
+
+      const who = document.createElement("span");
+      who.className = "wwho";
+      who.contentEditable = "true";
+      who.spellcheck = false;
+      who.dataset.wi = idx; who.dataset.wf = "who";
+      who.setAttribute("data-placeholder", "who?");
+      who.textContent = item.who || "";
+      const wv = (item.who || "").trim();
+      if (coded && wv) {
+        const col = personColor(wv);
+        who.style.background = `color-mix(in srgb, ${col} 22%, var(--rowA))`;
+        who.style.color = `color-mix(in srgb, ${col} 80%, var(--ink))`;
+      }
+
+      const del = document.createElement("button");
+      del.type = "button";
+      del.className = "wdel";
+      del.textContent = "×";
+      del.title = "Delete this weekly chore";
+      del.setAttribute("aria-label", "Delete this weekly chore");
+      del.addEventListener("click", () => { weekly.splice(idx, 1); renderWeekly(); buildLegend(); });
+
+      row.append(cb, name, who, del);
+      list.appendChild(row);
+    });
+  }
+  function addWeekly() {
+    weekly.push({ name: "", who: "", done: false });
+    renderWeekly();
+    const items = $("weeklyList").querySelectorAll(".wname");
+    const last = items[items.length - 1];
+    if (last) {
+      last.focus();
+      const sel = window.getSelection(), range = document.createRange();
+      range.selectNodeContents(last); sel.removeAllRanges(); sel.addRange(range);
+    }
+  }
+  $("addWeekly").addEventListener("click", addWeekly);
+
+  $("weeklyList").addEventListener("input", (e) => {
+    const el = e.target;
+    if (el.dataset.wi === undefined) return;
+    const item = weekly[+el.dataset.wi];
+    if (item) item[el.dataset.wf] = el.textContent;
+  });
+  $("weeklyList").addEventListener("focusout", (e) => {
+    if (e.target.dataset.wf === "who") { renderWeekly(); buildLegend(); }
+  });
+  $("weeklyList").addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && e.target.isContentEditable) { e.preventDefault(); e.target.blur(); }
+  });
+
   // ---- download the current chart (with all edits) back to a CSV file ----
   function toCSV(data) {
     return data
@@ -1204,7 +1367,7 @@ Family movie pick,,,,,,,Dad`;
 
   // Build one printable sheet keeping only the day columns in keepSet.
   // The chore-name column and the title/header ride along on every page.
-  function sheetChunkHTML(src, keepSet, showDone) {
+  function sheetChunkHTML(src, keepSet, showDone, includeWeekly) {
     const clone = src.cloneNode(true);
     clone.classList.remove("sheet-enter");
     clone.querySelectorAll("thead th[data-di]").forEach((th) => {
@@ -1217,6 +1380,8 @@ Family movie pick,,,,,,,Dad`;
         td.remove();
       }
     });
+    // weekly checklist rides on the last page only (avoid repeating it on each)
+    if (!includeWeekly) { const w = clone.querySelector("#weekly"); if (w) w.remove(); }
     return clone.outerHTML;
   }
 
@@ -1233,11 +1398,13 @@ Family movie pick,,,,,,,Dad`;
     const perPage = Math.max(1, Math.min(20, parseInt($("daysPerPage").value, 10) || 4));
     const pages = [];
     if ($("wideMode").value === "split" && dayCount > perPage) {
-      for (let start = 0; start < dayCount; start += perPage) {
+      const starts = [];
+      for (let s = 0; s < dayCount; s += perPage) starts.push(s);
+      starts.forEach((start, ci) => {
         const keep = new Set();
         for (let i = start; i < Math.min(start + perPage, dayCount); i++) keep.add(i);
-        pages.push(sheetChunkHTML(src, keep, showDone));
-      }
+        pages.push(sheetChunkHTML(src, keep, showDone, ci === starts.length - 1));
+      });
     } else {
       const clone = src.cloneNode(true);
       clone.classList.remove("sheet-enter");
@@ -1252,7 +1419,8 @@ Family movie pick,,,,,,,Dad`;
       `html,body{margin:0;background:#fff;}:root{${varStr}}` +
       `.page{width:100%;}.page + .page{page-break-before:always;}` +
       `.sheet{box-shadow:none!important;border:none!important;margin:0;width:100%;}` +
-      `.grip,.rowdel,.daydel,.daycolor{display:none!important;}[contenteditable]{outline:none!important;box-shadow:none!important;}` +
+      `.grip,.rowdel,.daydel,.daycolor,.wdel{display:none!important;}[contenteditable]{outline:none!important;box-shadow:none!important;}` +
+      `[contenteditable]:empty::before{content:""!important;}` +
       `.print-bar{position:sticky;top:0;z-index:9;display:flex;gap:12px;align-items:center;justify-content:center;` +
       `padding:12px;background:#222;color:#fff;font:600 14px/1.3 system-ui,sans-serif;}` +
       `.print-bar button{font:inherit;background:#fff;color:#222;border:0;border-radius:8px;padding:8px 16px;cursor:pointer;}` +
@@ -1301,6 +1469,12 @@ Family movie pick,,,,,,,Dad`;
   // init
   applyPalette("lemonade");
   loadText(SAMPLE);
+  weekly = [
+    { name: "Take out recycling", who: "", done: false },
+    { name: "Water all the plants", who: "", done: false },
+    { name: "Change bed sheets", who: "", done: false },
+  ];
+  renderWeekly();
 </script>
 
 </body>
